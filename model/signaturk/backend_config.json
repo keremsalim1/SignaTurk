@@ -7,8 +7,8 @@
   "requires_depth_sensor": false,
   "frame_count": 32,
   "runtime": {
-    "preferred_extractor": "rtmpose",
-    "try_rtmpose_first": true,
+    "preferred_extractor": "hf_rtmw",
+    "try_rtmpose_first": false,
     "allow_mediapipe_fallback": false,
     "realtime_streams": [
       "skeleton_v2",

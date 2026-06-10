@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TSL Nexus — Sign Language Intelligence</title>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,300;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/frontend/style.css">
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+  window.TSL_API = {
+    baseUrl: window.location.origin || "http://127.0.0.1:8000",
+    wsUrl: (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host,
+    endpoints: {
+      health:        "/api/health",
+      live:          "/api/predict/live",
+      history:       "/api/history",
+      dictionary:    "/api/dictionary",
+      settings:      "/api/settings",
+      adminOverview: "/api/admin/overview",
+      adminUsers:    "/api/admin/users",
+      adminLogs:     "/api/admin/logs",
+      adminModel:    "/api/admin/model",
+      adminStats:    "/api/admin/stats",
+      login:         "/api/auth/login",
+      register:      "/api/auth/register"
+    }
+  };
+</script>
+
+<script type="text/babel" src="/frontend/app.js?v=20260607-pipelinefix"></script>
+</body>
+</html>

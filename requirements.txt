@@ -1,0 +1,25 @@
+# Core framework
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+python-multipart==0.0.20
+websockets==15.0.1
+
+# ML / CV
+tensorflow==2.18.0
+mediapipe==0.10.21
+numpy<2.0
+opencv-python-headless==4.11.0.86
+opencv-python==4.11.0.86
+rtmlib==0.0.15
+onnxruntime==1.26.0
+
+# Database
+sqlalchemy==2.0.40
+psycopg[binary]==3.2.9
+
+# Auth / validation
+passlib==1.7.4
+pydantic[email]==2.11.1
+
+# Config
+python-dotenv>=1.0.0

@@ -93,18 +93,32 @@ The avatar/dictionary section uses:
 model/landmarks.json
 ```
 
-Large model files are stored with Git LFS. Install Git LFS before cloning if you need the repository to download the Keras, ONNX, NumPy, and MediaPipe task assets automatically:
+## Downloading Model Files
+
+The required model assets are included in this repository through Git LFS. No separate model download is needed when Git LFS is installed correctly.
+
+Recommended clone flow for reviewers:
 
 ```powershell
 git lfs install
 git clone https://github.com/ErayKulkizaga/SignaTurk.git
-```
-
-If the repository was cloned before Git LFS was installed, run:
-
-```powershell
+cd SignaTurk
 git lfs pull
 ```
+
+After cloning, these large files should exist as real files, not tiny text pointer files:
+
+```text
+model/model.keras
+model/signaturk/models/skeleton_v2.keras
+model/signaturk/models/skeleton_v4_seed.keras
+model/signaturk/models/skeleton_v6_seed.keras
+model/signaturk/models/hand_stream.keras
+model/signaturk/models/rtmw_hf/yolox_m.onnx
+model/signaturk/models/rtmw_hf/rtmw-dw-x-l_simcc-cocktail14.onnx
+```
+
+If GitHub reports an LFS bandwidth/quota error, use the same model files from the provided project bundle and keep the folder paths unchanged.
 
 ## Legacy Model Files
 

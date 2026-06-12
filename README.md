@@ -93,7 +93,18 @@ The avatar/dictionary section uses:
 model/landmarks.json
 ```
 
-Large model files are intentionally ignored by Git. Keep them in the same folder structure when moving the project to another machine.
+Large model files are stored with Git LFS. Install Git LFS before cloning if you need the repository to download the Keras, ONNX, NumPy, and MediaPipe task assets automatically:
+
+```powershell
+git lfs install
+git clone https://github.com/ErayKulkizaga/SignaTurk.git
+```
+
+If the repository was cloned before Git LFS was installed, run:
+
+```powershell
+git lfs pull
+```
 
 ## Legacy Model Files
 

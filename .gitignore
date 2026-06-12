@@ -8,11 +8,9 @@ __pycache__/
 .vs/
 *.ipynb_checkpoints/
 .env
-*.keras
-*.npy
-model/signaturk/models/
 static/
 uploads/
 run_logs/
 dist/
 local_dev.db
+uvicorn*.log

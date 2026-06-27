@@ -12,8 +12,6 @@ The application is designed to run locally for demos, reports, and development. 
 - Converts landmarks into model-ready skeleton, bone, motion, and hand streams.
 - Runs an ensemble of SignaTurk Keras models.
 - Returns the top predictions with confidence values.
-- Buffers confident sign predictions into fluent Turkish sentences.
-- Exposes `/api/text/*` for rule-based grammar, optional HF LLM arbitration, and Turkish TTS.
 - Stores confident predictions in history.
 - Serves dictionary and 3D avatar assets from local landmark data.
 
@@ -41,6 +39,109 @@ RGB webcam frame
 
 The default extractor is the local HF RTMW ONNX pipeline when the required ONNX files are present.
 
+## 3D Avatar Animation
+
+The `/avatar3d` screen renders a Mixamo-rigged humanoid and replays sign animations from
+the same landmark data used by the dictionary.
+
+High-level flow:
+
+```text
+SPA (frontend/app.js) embeds /avatar3d in an iframe
+-> word selection sent via postMessage({ type: 'play_sign', word })
+-> avatar3d.html fetches GET /landmark/{word}
+   each frame: pose33 + left_hand21 + right_hand21 (normalized landmarks)
+-> Three.js retargeting onto the avatar skeleton
+   position-preserving 2-bone arm IK + wrist/finger aim + torso/head follow
+-> rendered with frontend/avatarx.glb
+```
+
+Animation quality features in `frontend/avatar3d.html` (all logic is self-contained in this
+file; `avatar_solver.js` and `motion_preprocess.js` are no longer loaded):
+
+```text
+- Position-preserving 2-bone arm IK (applyArmIK): the wrist target is mapped into avatar space
+  with body-anchored anisotropic scaling so signs that bring the hand to the head / face / torso
+  or both hands together actually reach those positions (direction-only FK could not).
+    * horizontal scale  = avatar shoulder-width / source shoulder-width
+    * vertical scale     = avatar (shoulder->face) / source (shoulder->nose)
+    * depth (Z) scale    = horizontal * armDepthGain (0.45; MediaPipe pose-z is exaggerated)
+- Catmull-Rom cubic interpolation between keyframes + light EMA temporal smoothing.
+  NOTE: the data is already offline (Savitzky-Golay) smoothed, so runtime EMA is kept light
+  (smoothAlpha 0.85) — heavy runtime smoothing made hands lag behind fast motion.
+- Rest-padding trim (trimRestPadding): trims very-low resting frames at clip ends for flow.
+- Upper-body focus: waist clipping plane hides the lower body; camera auto-frames the upper body
+  (tight zoom that still keeps raised/wide arms on screen), slight 14-degree angle, vertical pan
+  so resting hands sit above the control bar.
+- Studio gradient background; head/neck follow the nose only weakly (no head dipping).
+- Presentation controls: on-screen word caption (top), Replay / Slow (0.6x) / Loop buttons (left).
+- delta-time clamped animation loop (stable after tab refocus); ease-out blend back to idle.
+```
+
+Tunable parameters live on the `ANIM` object:
+
+```text
+useIK=true  armDepthGain=0.45  fingerCurl=16  smoothAlpha=0.85  smoothMaxStep=0.30  FPS=15
+wristFullOrient=false  palmRoll=false   (palm-orientation control; off — see limitations below)
+```
+
+Known limitations (data/avatar bound, not retarget bugs):
+
+```text
+- No hand SHAPE in the data: every sign uses a near-identical open hand (verified; an RTMW
+  WholeBody re-extraction pilot produced the same flat hands). Fingers move with the data but
+  do not form distinct handshapes. This needs hand-authored handshapes or higher-resolution
+  close-up hand capture, not more retarget code.
+- Palm roll is uncontrolled by the direction-based wrist aim, so the palm can face the wrong way
+  on raised hands. Controlling it from the (flat/noisy) hand-z data jitters during playback, so it
+  is disabled. The avatar arm is also short (~60% of expected), so far-reaching signs over-extend.
+- Best results come from signs distinguished by arm/wrist motion rather than fine finger shape
+  (see DEMO_WORDS.md for a curated, visually verified demo set).
+```
+
+The 3D assets (`three.min.js`, `GLTFLoader.js`, `OrbitControls.js`) are served locally
+from `frontend/`. The avatar model `frontend/avatarx.glb` is tracked with Git LFS.
+
+### Avatar Landmark Data (generation & repair)
+
+`model/landmarks.json` holds the per-word avatar animation data (226 words, MediaPipe
+Holistic layout: pose 9 indices + left_hand 21 + right_hand 21, 30 frames each). It is
+generated from the AUTSL Turkish Sign Language video dataset, mapping each word to its
+class by name via `SignList_ClassId_TR_EN.csv` + `train_labels.csv`.
+
+The arm/body trajectories are reliable, but the hand landmarks carry no usable finger-shape
+detail (the AUTSL clips are too low-resolution for hands). See the "Known limitations" note in
+the 3D Avatar Animation section above and `DEMO_WORDS.md` for demo-word guidance.
+
+Two offline tools rebuild/repair this file (need `mediapipe`, `opencv-python`, `scipy`):
+
+```text
+tools/extract_landmarks.py   AUTSL videos -> landmarks.json schema (MediaPipe Holistic).
+                             Auto-maps word -> AUTSL class -> sample video, picks the best of
+                             N candidate samples, merges into the existing file and backs it up.
+tools/smooth_landmarks.py    Zero-phase Savitzky-Golay smoothing across the 30 frames to remove
+                             jitter without adding lag.
+```
+
+Typical regeneration (run from the repo root):
+
+```powershell
+# 1) Lock the hand orientation convention against a known-good word
+python tools/extract_landmarks.py --validate tesekkur --video <AUTSL>/train/<its_sample>_color.mp4
+
+# 2) Rebuild all words from their correct AUTSL classes
+python tools/extract_landmarks.py --all `
+  --train-dir <AUTSL>/train `
+  --signlist <AUTSL>/SignList_ClassId_TR_EN.csv `
+  --train-labels <AUTSL>/train_labels.csv `
+  --candidates 2 --model-complexity 2
+
+# 3) De-jitter
+python tools/smooth_landmarks.py --window 9 --poly 2
+```
+
+The backend caches `landmarks.json` at startup, so restart it after regeneration.
+
 ## Repository Layout
 
 ```text
@@ -49,11 +150,10 @@ database.py                 SQLAlchemy engine setup with SQLite fallback
 models.py                   SQLAlchemy ORM models for users, history, logs, and settings
 landmark_smoother.py        Landmark smoothing for the avatar/dictionary endpoint
 
-frontend/                   React CDN frontend, styling, avatar screen, static assets
+frontend/                   React CDN frontend (Babel standalone), styling, 3D avatar screen, Three.js assets
 signaturk_runtime/          New SignaTurk runtime: config, extractors, feature builder, ensemble
-text_processing/            Sign-gloss word stream to Turkish sentence, optional LLM, TTS
-tools/                      Utility scripts for packaging and runtime checks
-tests/                      Text-processing unit and eval tests
+tools/                      Utility scripts: packaging, runtime checks, and avatar landmark
+                            generation/repair (extract_landmarks.py, smooth_landmarks.py)
 
 model/signaturk/            New SignaTurk model config, labels, Keras models, ONNX extractors
 model/                      Legacy MediaPipe model files and avatar landmark dictionary
@@ -70,8 +170,6 @@ requirements.txt
 requirements-gpu.txt
 frontend/
 signaturk_runtime/
-text_processing/
-text_processing_routes.py
 tools/
 model/signaturk/
 model/landmarks.json
@@ -97,7 +195,11 @@ The avatar/dictionary section uses:
 
 ```text
 model/landmarks.json
+frontend/avatarx.glb
 ```
+
+`frontend/avatarx.glb` is the rigged avatar model loaded by the `/avatar3d` screen. It is
+tracked with Git LFS (`frontend/*.glb`). Without it the 3D page renders only the floor grid.
 
 ## Downloading Model Files
 
@@ -122,6 +224,7 @@ model/signaturk/models/skeleton_v6_seed.keras
 model/signaturk/models/hand_stream.keras
 model/signaturk/models/rtmw_hf/yolox_m.onnx
 model/signaturk/models/rtmw_hf/rtmw-dw-x-l_simcc-cocktail14.onnx
+frontend/avatarx.glb
 ```
 
 If GitHub reports an LFS bandwidth/quota error, use the same model files from the provided project bundle and keep the folder paths unchanged.
@@ -142,11 +245,17 @@ Do not delete these unless the legacy path is intentionally removed. They are us
 
 ## Setup
 
-Create or activate a Python virtual environment:
+Requires **Python 3.10–3.12** (the pinned TensorFlow 2.18 / MediaPipe 0.10.21 wheels do
+not support Python 3.13+).
+
+Create and activate a virtual environment:
 
 ```powershell
-.venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate
 ```
+
+On macOS/Linux activate with `source venv/bin/activate` instead.
 
 Install CPU dependencies:
 
@@ -193,16 +302,6 @@ If `DATABASE_URL` is missing or unavailable, the app falls back to SQLite and ma
 local_dev.db
 ```
 
-Text-processing variables:
-
-```env
-HF_TOKEN=hf_...                         # optional, enables authenticated HF Inference API calls
-SIGNAI_LIVE_SENTENCE=1                  # set 0 to disable live sentence assembly
-SIGNAI_TTS_ENGINE=auto                  # auto | gtts | piper
-SIGNAI_TTS_OFFLINE=1                    # prefer Piper when configured
-SIGNAI_PIPER_VOICE=C:\path\voice.onnx   # optional offline Turkish TTS voice
-```
-
 Live inference/debug variables:
 
 ```powershell
@@ -236,12 +335,6 @@ GET  /landmark/{word}          Smoothed landmark animation data
 WS   /api/predict/live         Main live SignaTurk WebSocket
 WS   /api/predict/live-legacy  Legacy live WebSocket path
 POST /api/predict/sequence     Sequence prediction endpoint
-GET  /api/text/models          Available grammar/LLM models
-POST /api/text/correct         Convert sign words to Turkish sentence (+ optional audio)
-POST /api/text/correct/async   Submit slower LLM correction as a job
-GET  /api/text/jobs/{job_id}   Poll an async correction job
-GET  /api/text/health          Text/LLM/TTS diagnostics
-GET  /api/text/demo            Standalone text-processing demo page
 ```
 
 ## Validation Commands
@@ -249,14 +342,7 @@ GET  /api/text/demo            Standalone text-processing demo page
 Syntax check:
 
 ```powershell
-.venv\Scripts\python.exe -m py_compile backend.py signaturk_runtime\config.py signaturk_runtime\realtime_state.py text_processing_routes.py
-```
-
-Text-processing checks:
-
-```powershell
-.venv\Scripts\python.exe -m unittest discover -s tests
-.venv\Scripts\python.exe -m text_processing.eval --check --min-exact 0.98
+venv\Scripts\python.exe -m py_compile backend.py signaturk_runtime\config.py signaturk_runtime\realtime_state.py
 ```
 
 Health check after the server starts:

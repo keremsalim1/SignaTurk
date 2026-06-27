@@ -12,6 +12,7 @@ opencv-python-headless==4.11.0.86
 opencv-python==4.11.0.86
 rtmlib==0.0.15
 onnxruntime-gpu==1.26.0
+scipy==1.16.3            # offline avatar landmark tools (tools/smooth_landmarks.py)
 
 # Database
 sqlalchemy==2.0.40

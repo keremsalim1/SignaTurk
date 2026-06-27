@@ -40,6 +40,26 @@
   };
 </script>
 
+<script>
+  (function () {
+    // Patch: force classic JSX runtime so Babel never emits `import` statements.
+    // Newer @babel/standalone defaults to automatic runtime, which adds
+    //   import { jsx as _jsx } from 'react/jsx-runtime'
+    // into the transpiled output. When Babel tries to inject that as a
+    // plain (non-module) <script>, the browser throws the appendChild error.
+    var _react = Babel.availablePresets['react'];
+    Babel.availablePresets['react'] = function (api, opts) {
+      return _react(api, Object.assign({}, opts, { runtime: 'classic' }));
+    };
+    // Safety: ensure env preset keeps module syntax as CommonJS, not ESM.
+    var _env = Babel.availablePresets['env'];
+    if (_env) {
+      Babel.availablePresets['env'] = function (api, opts) {
+        return _env(api, Object.assign({}, opts, { modules: 'commonjs' }));
+      };
+    }
+  })();
+</script>
 <script type="text/babel" src="/frontend/app.js?v=20260607-pipelinefix"></script>
 </body>
 </html>

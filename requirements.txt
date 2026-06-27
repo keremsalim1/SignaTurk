@@ -23,3 +23,15 @@ pydantic[email]==2.11.1
 
 # Config
 python-dotenv>=1.0.0
+
+# Text processing / sentence grammar and optional LLM/TTS
+huggingface_hub>=0.27.0
+gTTS==2.5.4
+transformers==4.46.3
+torch==2.5.1
+sentencepiece==0.2.0
+accelerate==1.1.1
+protobuf>=4.25.3,<5
+
+# Optional offline TTS:
+# piper-tts>=1.2.0

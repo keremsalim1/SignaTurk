@@ -993,6 +993,8 @@ function LivePage(){
   const [status, setStatus]         = useState('Idle');
   const [connected, setConnected]   = useState(false);
   const [recent, setRecent]         = useState([]);
+  const [sentence, setSentence]     = useState(null);
+  const [speechStatus, setSpeechStatus] = useState('');
   const wsRef       = useRef(null);
   const videoRef    = useRef(null);
   const streamRef   = useRef(null);
@@ -1057,8 +1059,14 @@ function LivePage(){
       }, sendIntervalMs);
     };
     wsRef.current.onmessage = (e) => {
-      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
       const d = JSON.parse(e.data);
+      if (d.type === 'sentence'){
+        setSentence({ text: d.sentence, words: d.words || [], source: d.source });
+        setSpeechStatus('');
+        setStatus('Recognizing');
+        return;
+      }
+      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
       setLiveDebug(d.debug || null);
       if (d.class_id === -1){ setStatus(d.label_tr || 'Processing…'); return; }
       setLiveResult(d);
@@ -1076,7 +1084,39 @@ function LivePage(){
     stopCamera();
     setConnected(false);
     setLiveDebug(null);
+    setSentence(null);
+    setSpeechStatus('');
     setStatus('Idle');
+  };
+
+  const flushSentence = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: 'flush' }));
+    }
+  };
+
+  const speakSentence = async () => {
+    const words = sentence?.words;
+    if (!words || !words.length) return;
+    setSpeechStatus('Ses hazırlanıyor...');
+    try {
+      const res = await fetch(window.TSL_API.baseUrl + '/api/text/correct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ words, use_ml: false, synthesize_audio: true }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.audio_url) {
+        setSpeechStatus(data.tts_status === 'failed' ? 'Ses üretilemedi.' : 'Ses dosyası oluşmadı.');
+        return;
+      }
+      const audio = new Audio(window.TSL_API.baseUrl + data.audio_url);
+      await audio.play();
+      setSpeechStatus('Ses oynatılıyor.');
+    } catch {
+      setSpeechStatus('Ses üretimi veya oynatma başarısız.');
+    }
   };
 
   useEffect(() => () => {
@@ -1203,6 +1243,19 @@ function LivePage(){
         </div>
 
         <div className="stack">
+          <div className="card">
+            <div className="card-title">Cümle</div>
+            <div className="card-sub">İşaret akışından oluşturulan kural tabanlı Türkçe cümle</div>
+            <div className="serif" style={{fontSize:20,margin:'10px 0',color:'var(--ink)',minHeight:28,lineHeight:1.4}}>
+              {sentence?.text || '—'}
+            </div>
+            <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+              <button className="btn primary" onClick={flushSentence} disabled={!connected}>Tamamla</button>
+              <button className="btn ghost" onClick={speakSentence} disabled={!(sentence?.words?.length)}>Seslendir</button>
+              {speechStatus && <span style={{fontSize:12,color:'var(--ink-muted)'}}>{speechStatus}</span>}
+            </div>
+          </div>
+
           <div className="result-card">
             <div className="result-card-inner">
               <div className="label">Detected Sign</div>

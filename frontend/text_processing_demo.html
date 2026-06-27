@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignAI — Text Processing Demo</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            max-width: 880px;
+            margin: 2em auto;
+            padding: 1em;
+            color: #1f2937;
+            background: #f9fafb;
+            line-height: 1.5;
+        }
+        header h1 { margin: 0; color: #111827; }
+        header p { color: #6b7280; margin-top: 0.4em; }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 1.5em;
+            margin-bottom: 1em;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        label { display: block; margin-top: 1em; font-weight: 600; color: #374151; }
+        input[type=text], select {
+            width: 100%;
+            padding: 0.6em 0.75em;
+            font-size: 1em;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            margin-top: 0.4em;
+            background: white;
+        }
+        input[type=text]:focus, select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+        }
+        button {
+            padding: 0.7em 1.4em;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            margin-top: 1em;
+            transition: background 0.15s;
+        }
+        button:hover:not(:disabled) { background: #1d4ed8; }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        .sentence {
+            font-size: 1.35em;
+            padding: 0.9em 1em;
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            border-radius: 4px;
+            margin: 0.6em 0;
+            color: #1e3a8a;
+        }
+        .meta { font-size: 0.92em; color: #6b7280; margin-top: 0.4em; }
+        .meta code { background: #f3f4f6; padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.95em; }
+        .badge {
+            display: inline-block;
+            padding: 0.2em 0.6em;
+            border-radius: 12px;
+            font-size: 0.82em;
+            font-weight: 600;
+        }
+        .badge-ml { background: #dcfce7; color: #166534; }
+        .badge-rule { background: #fed7aa; color: #9a3412; }
+        .rejected {
+            color: #991b1b;
+            font-size: 0.9em;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 0.7em;
+            border-radius: 6px;
+            margin-top: 0.6em;
+        }
+        .rejected code { background: #fff; padding: 0.1em 0.3em; }
+        .error { color: #991b1b; padding: 1em; background: #fef2f2; border-radius: 6px; }
+        .hint { font-size: 0.85em; color: #6b7280; margin-top: 0.4em; }
+        .examples { display: flex; flex-wrap: wrap; gap: 0.4em; margin-top: 0.5em; }
+        .examples button {
+            margin-top: 0;
+            padding: 0.3em 0.7em;
+            font-size: 0.85em;
+            font-weight: 500;
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .examples button:hover:not(:disabled) { background: #e5e7eb; }
+        audio { width: 100%; margin-top: 0.8em; }
+        .spinner {
+            display: inline-block;
+            width: 12px; height: 12px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-right: 0.5em;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>SignAI · Text Processing Demo</h1>
+        <p>LSTM modelinden gelen ham kelime dizisini akıcı bir Türkçe cümleye ve sese çevirir. Hibrit gramer motoru: ML modeli + rule-based fallback.</p>
+    </header>
+
+    <section class="card">
+        <label for="words-input">Kelime dizisi (boşlukla ayır)</label>
+        <input type="text" id="words-input" value="merhaba ben su istemek" autocomplete="off">
+
+        <div class="examples">
+            <button type="button" onclick="setWords('merhaba ben su istemek')">merhaba ben su istemek</button>
+            <button type="button" onclick="setWords('sen okul gitmek')">sen okul gitmek</button>
+            <button type="button" onclick="setWords('ben kitap okumak')">ben kitap okumak</button>
+            <button type="button" onclick="setWords('biz yemek yemek')">biz yemek yemek</button>
+            <button type="button" onclick="setWords('o ev gelmek')">o ev gelmek</button>
+        </div>
+
+        <label for="model-select">Gramer motoru</label>
+        <select id="model-select">
+            <option value="">Sadece rule-based (model yüklemez — hızlı)</option>
+        </select>
+        <p class="hint">
+            <strong>ML API</strong> seçenekleri Hugging Face Inference API üzerinden çalışır
+            (RAM/CPU kullanmaz, anlık).
+            <strong>Local ML</strong> seçenekleri ilk seferde model dosyasını indirir
+            (HuggingFace cache); CPU üzerinde dynamic int8 quantization ile hızlandırılır.
+        </p>
+        <p id="token-warning" class="hint" style="display:none; color:#b00;"></p>
+
+        <button id="run-btn" type="button" onclick="runCorrection()">Cümleyi Oluştur</button>
+    </section>
+
+    <div id="result-area"></div>
+
+    <script>
+        const API = '/api/text';
+
+        function setWords(s) {
+            document.getElementById('words-input').value = s;
+        }
+
+        async function loadModels() {
+            try {
+                const res = await fetch(API + '/models');
+                if (!res.ok) return;
+                const data = await res.json();
+                const select = document.getElementById('model-select');
+                // Inference API options first (no local resources needed),
+                // then heavier local options below. Recommended models
+                // bubble to the top of their group and get auto-selected.
+                const apiModels = data.models.filter(m => m.arch === 'inference-api');
+                const localModels = data.models.filter(m => m.arch !== 'inference-api');
+                apiModels.sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0));
+                let autoSelected = false;
+                for (const m of apiModels) {
+                    const opt = document.createElement('option');
+                    opt.value = m.key;
+                    const baseKey = m.key.replace(/-api$/, '');
+                    const star = m.recommended ? ' ★ recommended' : '';
+                    opt.textContent = `ML API: ${baseKey} (Instant Cloud)${star}`;
+                    opt.title = m.notes || '';
+                    if (m.recommended && !autoSelected) {
+                        opt.selected = true;
+                        autoSelected = true;
+                    }
+                    select.appendChild(opt);
+                }
+                for (const m of localModels) {
+                    const opt = document.createElement('option');
+                    opt.value = m.key;
+                    const tags = [];
+                    if (m.instruction_tuned) tags.push('instruction-tuned');
+                    if (m.turkish_native) tags.push('Turkish-native');
+                    tags.push(m.arch);
+                    const isDefault = m.key === data.default ? ' ★ default' : '';
+                    opt.textContent = `Local ML · ${m.key} · ~${m.approx_size_mb} MB · ${tags.join(', ')}${isDefault}`;
+                    select.appendChild(opt);
+                }
+            } catch (e) {
+                console.error('Model listesi alınamadı:', e);
+            }
+        }
+
+        async function runCorrection() {
+            const words = document.getElementById('words-input').value
+                .trim().split(/\s+/).filter(Boolean);
+            const modelKey = document.getElementById('model-select').value;
+            const useMl = !!modelKey;
+            const btn = document.getElementById('run-btn');
+            const area = document.getElementById('result-area');
+
+            if (!words.length) {
+                area.innerHTML = '<div class="card error">Lütfen en az bir kelime girin.</div>';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>' + (useMl ? 'Model çalışıyor… (ilk seferde yavaş olabilir)' : 'Çalışıyor…');
+            area.innerHTML = '';
+
+            try {
+                const res = await fetch(API + '/correct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        words,
+                        use_ml: useMl,
+                        model_key: modelKey || null,
+                        synthesize_audio: true,
+                    }),
+                });
+                const text = await res.text();
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status} — ${text}`);
+                }
+                renderResult(JSON.parse(text));
+            } catch (e) {
+                area.innerHTML = `<div class="card error">Hata: ${escapeHtml(e.message)}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Cümleyi Oluştur';
+            }
+        }
+
+        function renderResult(data) {
+            const badgeClass = data.source.startsWith('ml:') ? 'badge-ml' : 'badge-rule';
+            let html = `
+                <div class="card">
+                    <div class="meta">Girdi: <code>${escapeHtml(data.words.join(' '))}</code></div>
+                    <div class="sentence">${escapeHtml(data.sentence || '(boş)')}</div>
+                    <div class="meta">
+                        Kaynak: <span class="badge ${badgeClass}">${escapeHtml(data.source)}</span>
+                        ${data.ml_latency_ms ? ` &nbsp;·&nbsp; ML süresi: <strong>${Math.round(data.ml_latency_ms)} ms</strong>` : ''}
+                    </div>
+                    ${data.reason ? `<div class="meta">Arbiter: <em>${escapeHtml(data.reason)}</em></div>` : ''}
+            `;
+            if (data.rejected_candidate) {
+                html += `<div class="rejected">
+                    ML çıktısı <strong>reddedildi</strong> (${escapeHtml(data.rejection_reason || 'unknown')}):<br>
+                    <code>${escapeHtml(data.rejected_candidate)}</code>
+                </div>`;
+            }
+            if (data.audio_url) {
+                html += `<audio controls preload="auto" src="${escapeHtml(data.audio_url)}"></audio>`;
+            } else if (data.tts_status === 'disabled') {
+                html += `<div class="meta">Ses üretimi kapalı.</div>`;
+            } else if (data.tts_status === 'failed') {
+                html += `<div class="meta">Ses üretilemedi (gTTS internete erişemedi).</div>`;
+            } else {
+                html += `<div class="meta">Ses dosyası üretilmedi.</div>`;
+            }
+            html += '</div>';
+            document.getElementById('result-area').innerHTML = html;
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        async function loadHealth() {
+            try {
+                const res = await fetch(API + '/health');
+                if (!res.ok) return;
+                const h = await res.json();
+                if (!h.hf_token_present) {
+                    const el = document.getElementById('token-warning');
+                    el.style.display = '';
+                    el.innerHTML = '⚠️ HF_TOKEN tanımlı değil: bulut ML API (Qwen) anonim çağrılır ve '
+                        + 'sıkı oran sınırlarına takılabilir. Üretimde HF_TOKEN ayarlayın ya da rule-based modu seçin.';
+                }
+            } catch (e) { /* health is best-effort */ }
+        }
+
+        loadModels();
+        loadHealth();
+    </script>
+</body>
+</html>

@@ -33,6 +33,8 @@ from sqlalchemy.orm import Session
 import database as db_module
 from database import engine, get_db, Base
 import models
+from text_processing import GrammarConfig, PipelineConfig, PipelineResult, SignTextPipeline
+from text_processing_routes import router as text_processing_router
 from signaturk_runtime.config import default_settings as signaturk_default_settings
 from signaturk_runtime.config import load_backend_config as signaturk_load_backend_config
 from signaturk_runtime.config import load_display_names as signaturk_load_display_names
@@ -950,6 +952,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(text_processing_router)
+
 if FRONTEND_DIR.exists():
     app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR), html=False), name="frontend")
 
@@ -1043,6 +1047,31 @@ def login(data: LoginData, db: Session = Depends(get_db)):
 # ═══════════════════════════════════════════════════════════
 #  ROUTES — Canlı tahmin WebSocket (tsl-nexus)
 # ═══════════════════════════════════════════════════════════
+LIVE_SENTENCE_ENABLED = os.environ.get("SIGNAI_LIVE_SENTENCE", "1") == "1"
+
+
+def _build_live_text_pipeline() -> Optional[SignTextPipeline]:
+    if not LIVE_SENTENCE_ENABLED:
+        return None
+    return SignTextPipeline(
+        PipelineConfig(grammar=GrammarConfig(use_ml=False), synthesize_audio=False)
+    )
+
+
+def _live_sentence_message(result: PipelineResult) -> Dict[str, Any]:
+    return {
+        "class_id": -1,
+        "type": "sentence",
+        "sentence": result.sentence,
+        "words": result.words,
+        "source": result.grammar_source,
+        "label_tr": result.sentence,
+        "label_en": "",
+        "confidence": 1.0,
+        "animation_key": "none",
+    }
+
+
 @app.websocket("/api/predict/live-legacy")
 async def live_predict(websocket: WebSocket):
     await websocket.accept()
@@ -1256,6 +1285,16 @@ async def live_predict_async(websocket: WebSocket):
     prediction_cooldown_until = 0.0
     prediction_task = None
     pending_prediction = None
+    text_pipeline = _build_live_text_pipeline()
+
+    async def emit_sentence_if_ready():
+        if text_pipeline is None:
+            return False
+        sentence_result = text_pipeline.tick()
+        if sentence_result is None or not sentence_result.sentence:
+            return False
+        await websocket.send_json(_live_sentence_message(sentence_result))
+        return True
 
     def start_prediction(job):
         nonlocal prediction_task, pending_prediction
@@ -1302,6 +1341,8 @@ async def live_predict_async(websocket: WebSocket):
                     confidence=f"{confidence*100:.1f}%",
                 ))
                 db.commit()
+                if text_pipeline is not None:
+                    text_pipeline.feed(label_tr, confidence)
 
         if result is not None:
             await websocket.send_json(result)
@@ -1336,6 +1377,14 @@ async def live_predict_async(websocket: WebSocket):
             landmarks = None
             try:
                 payload = json.loads(incoming)
+                if isinstance(payload, dict) and payload.get("action") == "flush":
+                    if text_pipeline is not None:
+                        sentence_result = text_pipeline.flush()
+                        if sentence_result is not None and sentence_result.sentence:
+                            await websocket.send_json(_live_sentence_message(sentence_result))
+                    continue
+                if not isinstance(payload, dict):
+                    payload = {}
                 client_sent_at = payload.get("sent_at")
                 frame_id = payload.get("frame_id")
                 if "landmarks" in payload:
@@ -1346,6 +1395,8 @@ async def live_predict_async(websocket: WebSocket):
                     image_payload = payload["image"]
             except (json.JSONDecodeError, ValueError):
                 pass
+
+            await emit_sentence_if_ready()
 
             if landmarks is None:
                 t_decode_start = time.perf_counter()

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SignAI · Metin İşleme Test Arayüzü</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --card2:#1e222b; --ink:#e8ebf0; --muted:#9aa3b2;
+    --line:#2a2f3a; --gold:#c9b289; --blue:#7b95b3; --green:#5fae7a; --red:#d2776e;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  header{padding:22px 20px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#13161d,#0f1115)}
+  header h1{margin:0;font-size:19px;font-weight:650}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:880px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .card h2{margin:0 0 12px;font-size:15px;font-weight:600}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
+  input[type=text],select{width:100%;padding:10px 12px;background:var(--card2);border:1px solid var(--line);
+    border-radius:10px;color:var(--ink);font-size:14px;outline:none}
+  input[type=text]:focus,select:focus{border-color:var(--blue)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row > div{flex:1;min-width:160px}
+  .checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}
+  .checks label{display:flex;align-items:center;gap:7px;margin:0;color:var(--ink);font-size:13px;cursor:pointer}
+  .checks input{width:16px;height:16px;accent-color:var(--gold)}
+  .examples{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .examples button{background:var(--card2);border:1px solid var(--line);color:var(--muted);
+    padding:5px 10px;border-radius:20px;font-size:12px;cursor:pointer}
+  .examples button:hover{border-color:var(--gold);color:var(--ink)}
+  .btn{margin-top:14px;padding:11px 18px;border:none;border-radius:10px;background:var(--gold);
+    color:#1b1206;font-weight:650;font-size:14px;cursor:pointer}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .out{margin-top:16px;padding:16px;background:var(--card2);border:1px solid var(--line);border-radius:12px;display:none}
+  .out.show{display:block}
+  .sentence{font-size:22px;font-weight:600;margin:2px 0 12px}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--line)}
+  .badge.rule{background:rgba(123,149,179,.15);color:var(--blue)}
+  .badge.ml{background:rgba(201,178,137,.15);color:var(--gold)}
+  .meta{font-size:13px;color:var(--muted);margin:6px 0}
+  .meta code{color:var(--ink);background:#000;padding:1px 6px;border-radius:5px;font-size:12px}
+  .rejected{margin-top:10px;padding:10px;border-radius:9px;background:rgba(210,119,110,.1);
+    border:1px solid rgba(210,119,110,.3);font-size:13px}
+  audio{width:100%;margin-top:12px}
+  pre{margin:0;padding:14px;background:#0b0d11;border:1px solid var(--line);border-radius:10px;
+    overflow:auto;font-size:12px;color:#c8d0db;max-height:340px}
+  .err{color:var(--red)}
+  .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.3);
+    border-top-color:#1b1206;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  .pill{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .ok{color:var(--green)} .no{color:var(--red)} .muted{color:var(--muted)}
+  .status{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border-radius:10px;
+    font-size:13px;margin:0 0 14px;border:1px solid var(--line)}
+  .status .ico{font-weight:700;line-height:1.4}
+  .status.ok{background:rgba(95,174,122,.12);border-color:rgba(95,174,122,.4);color:var(--green)}
+  .status.warn{background:rgba(201,178,137,.12);border-color:rgba(201,178,137,.42);color:var(--gold)}
+  .status.neutral{background:rgba(123,149,179,.1);border-color:rgba(123,149,179,.32);color:var(--blue)}
+  .ping-result{margin-left:10px;font-size:13px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <h1>SignAI · Metin İşleme Test Arayüzü</h1>
+  <p>İşaret kelime dizisi → akıcı Türkçe cümle (+ opsiyonel ses). Ağır model/kamera GEREKMEZ — yalnız <code>/api/text/*</code>.</p>
+</header>
+
+<main>
+  <!-- ===================== CÜMLE ===================== -->
+  <div class="card">
+    <h2>① Cümle Oluştur</h2>
+    <label for="words">Kelime dizisi (boşlukla ayır)</label>
+    <input id="words" type="text" value="merhaba ben su istemek" autocomplete="off"/>
+    <div class="examples" id="examples"></div>
+
+    <div class="row">
+      <div>
+        <label for="model">Gramer motoru</label>
+        <select id="model"><option value="">Rule-based (model yüklemez — hızlı)</option></select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:2">
+        <label for="custom-model">Özel model (opsiyonel — HF adı; üstteki seçimi geçersiz kılar)</label>
+        <input id="custom-model" type="text" placeholder="ör: Qwen/Qwen3-8B" autocomplete="off"/>
+      </div>
+      <div>
+        <label for="custom-arch">Mimari</label>
+        <select id="custom-arch">
+          <option value="inference-api">inference-api (bulut/chat)</option>
+          <option value="causal">causal (yerel)</option>
+          <option value="seq2seq">seq2seq (yerel)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <button class="btn ghost" id="ping" onclick="pingModel()">Bağlantıyı test et</button>
+      <span id="ping-result" class="ping-result"></span>
+    </div>
+
+    <div class="checks">
+      <label><input type="checkbox" id="audio"/> Ses üret (synthesize_audio)</label>
+      <label><input type="checkbox" id="async"/> Async (job ile)</label>
+    </div>
+
+    <button class="btn" id="run" onclick="run()">Cümleyi Oluştur</button>
+    <div class="hint">İpucu: “Ses üret” kapalıyken gTTS HİÇ çalışmaz (düzeltilen hata). ML motoru seçersen <code>HF_TOKEN</code> + internet gerekir.</div>
+
+    <div class="out" id="out"></div>
+  </div>
+
+  <!-- ===================== HEALTH ===================== -->
+  <div class="card">
+    <h2>② Sağlık / Durum <span class="pill" id="health-pill">—</span></h2>
+    <button class="btn ghost" onclick="loadHealth()">Yenile</button>
+    <button class="btn ghost" onclick="clearCache()">Cache temizle</button>
+    <pre id="health" style="margin-top:12px">Yüklemek için “Yenile”.</pre>
+  </div>
+</main>
+
+<script>
+const API = '/api/text';
+const EXAMPLES = ['merhaba ben su istemek','sen okul gitmek','ben kitap okumak',
+  'biz yemek yemek','o ev gelmek','sen gelmek mi','ben gelmek değil','ev yok','iki'];
+
+function setWords(s){ document.getElementById('words').value = s; }
+
+(function initExamples(){
+  const box = document.getElementById('examples');
+  EXAMPLES.forEach(p => {
+    const b = document.createElement('button');
+    b.textContent = p; b.onclick = () => setWords(p);
+    box.appendChild(b);
+  });
+})();
+
+async function loadModels(){
+  try{
+    const res = await fetch(API + '/models');
+    if(!res.ok) return;
+    const data = await res.json();
+    const sel = document.getElementById('model');
+    const api = data.models.filter(m => m.arch === 'inference-api');
+    const local = data.models.filter(m => m.arch !== 'inference-api');
+    api.forEach(m => addOpt(sel, m.key, `ML API · ${m.key}${m.recommended?' ★':''} (bulut)`));
+    local.forEach(m => addOpt(sel, m.key, `Yerel ML · ${m.key} · ~${m.approx_size_mb} MB`));
+  }catch(e){ /* sunucu kapalı olabilir */ }
+}
+function addOpt(sel,val,txt){ const o=document.createElement('option'); o.value=val; o.textContent=txt; sel.appendChild(o); }
+
+async function run(){
+  const words = document.getElementById('words').value.trim().split(/\s+/).filter(Boolean);
+  const modelKey = document.getElementById('model').value;
+  const customModel = document.getElementById('custom-model').value.trim();
+  const customArch = document.getElementById('custom-arch').value;
+  const useMl = !!modelKey || !!customModel;
+  const audio = document.getElementById('audio').checked;
+  const isAsync = document.getElementById('async').checked;
+  const out = document.getElementById('out');
+  const btn = document.getElementById('run');
+
+  if(!words.length){ show(out, `<div class="err">En az bir kelime gir.</div>`); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Çalışıyor…';
+  out.className = 'out';
+
+  const body = JSON.stringify({
+    words,
+    use_ml: useMl,
+    model_key: modelKey || null,
+    model_name: customModel || null,
+    model_arch: customModel ? customArch : null,
+    synthesize_audio: audio,
+  });
+  try{
+    let data;
+    if(isAsync){
+      const sub = await fetch(API + '/correct/async', {method:'POST',headers:{'Content-Type':'application/json'},body});
+      if(!sub.ok) throw new Error(`async HTTP ${sub.status} — ${await sub.text()}`);
+      const { job_id } = await sub.json();
+      data = await poll(job_id, out);
+      if(!data) return;
+    }else{
+      const res = await fetch(API + '/correct', {method:'POST',headers:{'Content-Type':'application/json'},body});
+      const txt = await res.text();
+      if(!res.ok) throw new Error(`HTTP ${res.status} — ${txt}`);
+      data = JSON.parse(txt);
+    }
+    render(out, data);
+  }catch(e){
+    show(out, `<div class="err">Hata: ${esc(e.message)}</div>`);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Cümleyi Oluştur';
+  }
+}
+
+async function poll(jobId, out){
+  for(let i=0;i<60;i++){
+    show(out, `<div class="meta"><span class="spinner"></span>Async job <code>${esc(jobId)}</code> bekleniyor… (${i})</div>`);
+    const res = await fetch(`${API}/jobs/${jobId}`);
+    if(!res.ok) throw new Error(`job HTTP ${res.status}`);
+    const j = await res.json();
+    if(j.status === 'done') return j.result;
+    if(j.status === 'error') throw new Error(`job error: ${j.error}`);
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error('async zaman aşımı');
+}
+
+// Green = ML used · Amber = ML tried but failed/rejected (rule-based shown)
+// · Neutral = rule-based by design (fast-track / disabled).
+function statusBanner(d){
+  const src = d.source || '';
+  if(src.startsWith('ml:'))
+    return `<div class="status ok"><span class="ico">✓</span><span>ML modeli kullanıldı.</span></div>`;
+  if(d.ml_error)
+    return `<div class="status warn"><span class="ico">⚠</span><span>ML denendi ama başarısız oldu — kural tabanlı sonuç gösteriliyor.<br>${esc(d.ml_error)}</span></div>`;
+  if(d.rejected_candidate)
+    return `<div class="status warn"><span class="ico">⚠</span><span>ML bir çıktı üretti ama kalite kontrolünden geçemedi — kural tabanlı gösteriliyor.</span></div>`;
+  return `<div class="status neutral"><span class="ico">•</span><span>Kural tabanlı motor (tasarım gereği — hızlı ve güvenilir).</span></div>`;
+}
+
+function render(out, d){
+  const badge = (d.source||'').startsWith('ml:') ? 'ml' : 'rule';
+  let h = statusBanner(d);
+  h += `<div class="sentence">${esc(d.sentence || '(boş)')}</div>`;
+  h += `<div class="meta">Kaynak: <span class="badge ${badge}">${esc(d.source)}</span>`;
+  if(d.ml_latency_ms) h += ` &nbsp;·&nbsp; ML süresi: <code>${Math.round(d.ml_latency_ms)} ms</code>`;
+  h += ` &nbsp;·&nbsp; TTS: <code>${esc(d.tts_status||'-')}</code></div>`;
+  if(d.reason) h += `<div class="meta">Arbiter: <em>${esc(d.reason)}</em></div>`;
+  if(d.rejected_candidate) h += `<div class="rejected">ML çıktısı <b>reddedildi</b> (${esc(d.rejection_reason||'?')}):<br><code>${esc(d.rejected_candidate)}</code></div>`;
+  if(d.audio_url) h += `<audio controls src="${esc(d.audio_url)}"></audio>`;
+  else if(d.tts_status==='disabled') h += `<div class="meta">Ses üretimi kapalı.</div>`;
+  else if(d.tts_status==='failed') h += `<div class="meta err">Ses üretilemedi (gTTS internete erişemedi / kurulu değil).</div>`;
+  show(out, h);
+}
+
+async function loadHealth(){
+  const pre = document.getElementById('health');
+  const pill = document.getElementById('health-pill');
+  try{
+    const res = await fetch(API + '/health');
+    const h = await res.json();
+    pre.textContent = JSON.stringify(h, null, 2);
+    pill.innerHTML = h.hf_token_present
+      ? '<span class="ok">HF_TOKEN ✓</span>'
+      : '<span class="no">HF_TOKEN yok</span>';
+  }catch(e){ pre.innerHTML = `<span class="err">Sağlık alınamadı: ${esc(e.message)}</span>`; }
+}
+
+async function clearCache(){
+  try{
+    const res = await fetch(API + '/cache', {method:'DELETE'});
+    const j = await res.json();
+    alert(`Cache temizlendi: ${j.cleared} pipeline kaldırıldı.`);
+    loadHealth();
+  }catch(e){ alert('Cache temizlenemedi: ' + e.message); }
+}
+
+// Probe the selected model's connection (POST /api/text/ping) and show a
+// clear ✓/ℹ/✗ with an actionable Turkish reason — before any correction.
+async function pingModel(){
+  const modelKey = document.getElementById('model').value;
+  const customModel = document.getElementById('custom-model').value.trim();
+  const customArch = document.getElementById('custom-arch').value;
+  const span = document.getElementById('ping-result');
+  const btn = document.getElementById('ping');
+  if(!modelKey && !customModel){
+    span.innerHTML = '<span class="muted">Önce bir ML modeli seç — kural tabanlı için test gerekmez.</span>';
+    return;
+  }
+  btn.disabled = true;
+  span.innerHTML = '<span class="spinner" style="border-top-color:#9aa3b2"></span>Test ediliyor…';
+  try{
+    const res = await fetch(API + '/ping', {method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model_key: modelKey || null,
+        model_name: customModel || null,
+        model_arch: customModel ? customArch : null,
+      })});
+    const txt = await res.text();
+    if(!res.ok) throw new Error(`HTTP ${res.status} — ${txt}`);
+    const d = JSON.parse(txt);
+    let icon, cls;
+    if(d.ok && d.category === 'ok'){ icon = '✓'; cls = 'ok'; }
+    else if(d.category === 'local'){ icon = 'ℹ'; cls = 'muted'; }
+    else { icon = '✗'; cls = 'no'; }
+    const ms = d.latency_ms ? ` (${Math.round(d.latency_ms)} ms)` : '';
+    span.innerHTML = `<span class="${cls}">${icon} ${esc(d.detail)}${ms}</span>`;
+  }catch(e){
+    span.innerHTML = `<span class="no">✗ Test başarısız: ${esc(e.message)}</span>`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function show(el, html){ el.innerHTML = html; el.className = 'out show'; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+loadModels();
+loadHealth();
+</script>
+</body>
+</html>

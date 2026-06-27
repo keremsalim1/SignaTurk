@@ -12,6 +12,8 @@ The application is designed to run locally for demos, reports, and development. 
 - Converts landmarks into model-ready skeleton, bone, motion, and hand streams.
 - Runs an ensemble of SignaTurk Keras models.
 - Returns the top predictions with confidence values.
+- Buffers confident sign predictions into fluent Turkish sentences.
+- Exposes `/api/text/*` for rule-based grammar, optional HF LLM arbitration, and Turkish TTS.
 - Stores confident predictions in history.
 - Serves dictionary and 3D avatar assets from local landmark data.
 
@@ -49,7 +51,9 @@ landmark_smoother.py        Landmark smoothing for the avatar/dictionary endpoin
 
 frontend/                   React CDN frontend, styling, avatar screen, static assets
 signaturk_runtime/          New SignaTurk runtime: config, extractors, feature builder, ensemble
+text_processing/            Sign-gloss word stream to Turkish sentence, optional LLM, TTS
 tools/                      Utility scripts for packaging and runtime checks
+tests/                      Text-processing unit and eval tests
 
 model/signaturk/            New SignaTurk model config, labels, Keras models, ONNX extractors
 model/                      Legacy MediaPipe model files and avatar landmark dictionary
@@ -66,6 +70,8 @@ requirements.txt
 requirements-gpu.txt
 frontend/
 signaturk_runtime/
+text_processing/
+text_processing_routes.py
 tools/
 model/signaturk/
 model/landmarks.json
@@ -187,6 +193,16 @@ If `DATABASE_URL` is missing or unavailable, the app falls back to SQLite and ma
 local_dev.db
 ```
 
+Text-processing variables:
+
+```env
+HF_TOKEN=hf_...                         # optional, enables authenticated HF Inference API calls
+SIGNAI_LIVE_SENTENCE=1                  # set 0 to disable live sentence assembly
+SIGNAI_TTS_ENGINE=auto                  # auto | gtts | piper
+SIGNAI_TTS_OFFLINE=1                    # prefer Piper when configured
+SIGNAI_PIPER_VOICE=C:\path\voice.onnx   # optional offline Turkish TTS voice
+```
+
 Live inference/debug variables:
 
 ```powershell
@@ -220,6 +236,12 @@ GET  /landmark/{word}          Smoothed landmark animation data
 WS   /api/predict/live         Main live SignaTurk WebSocket
 WS   /api/predict/live-legacy  Legacy live WebSocket path
 POST /api/predict/sequence     Sequence prediction endpoint
+GET  /api/text/models          Available grammar/LLM models
+POST /api/text/correct         Convert sign words to Turkish sentence (+ optional audio)
+POST /api/text/correct/async   Submit slower LLM correction as a job
+GET  /api/text/jobs/{job_id}   Poll an async correction job
+GET  /api/text/health          Text/LLM/TTS diagnostics
+GET  /api/text/demo            Standalone text-processing demo page
 ```
 
 ## Validation Commands
@@ -227,7 +249,14 @@ POST /api/predict/sequence     Sequence prediction endpoint
 Syntax check:
 
 ```powershell
-.venv\Scripts\python.exe -m py_compile backend.py signaturk_runtime\config.py signaturk_runtime\realtime_state.py
+.venv\Scripts\python.exe -m py_compile backend.py signaturk_runtime\config.py signaturk_runtime\realtime_state.py text_processing_routes.py
+```
+
+Text-processing checks:
+
+```powershell
+.venv\Scripts\python.exe -m unittest discover -s tests
+.venv\Scripts\python.exe -m text_processing.eval --check --min-exact 0.98
 ```
 
 Health check after the server starts:

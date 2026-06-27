@@ -1,0 +1,56 @@
+[project]
+name = "signai-text-processing"
+version = "0.1.0"
+description = "Turkish sign-gloss word streams → fluent Turkish text (rule-based + ML hybrid) and TTS."
+requires-python = ">=3.10"
+
+# ── Lint / format / type config for the text_processing module ──
+# Heavy ML/CV deps (torch, transformers, huggingface_hub, gtts) are optional
+# and lazily imported, so the type checker is told to ignore them.
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# The eval corpus and generated TTS output are data, not source.
+extend-exclude = ["text_processing/eval/dataset.jsonl", "uploads"]
+
+[tool.ruff.lint]
+# Focused, low-churn set: pycodestyle (E/W), pyflakes (F), import sorting (I),
+# and bugbear (B) for real defects. pyupgrade (UP) is deferred — modernizing
+# every legacy signature is a separate mechanical pass, not this one.
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    # Long Turkish strings, model-note tables, and few-shot prompts read
+    # better unwrapped; the formatter still caps real code at line-length.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests stub optional modules into sys.modules before importing, so imports
+# legitimately appear after statements.
+"tests/*" = ["E402"]
+# Re-export shims: names are imported purely to re-publish the public API,
+# so "imported but unused" does not apply.
+"text_processing/grammar/__init__.py" = ["F401"]
+"text_processing_routes.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["text_processing"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+files = ["text_processing"]
+# Optional/lazy deps (torch, transformers, huggingface_hub, gtts, fastapi
+# internals) have no stubs in the light CI env.
+ignore_missing_imports = true
+follow_imports = "silent"
+# Pragmatic first pass: surface real type errors (bad attributes, wrong
+# returns) without forcing a full annotation sweep on legacy code.
+check_untyped_defs = false
+disallow_untyped_defs = false
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
